@@ -1,46 +1,41 @@
-const cron = require('node-cron');
 const fs = require('fs');
 const path = require('path');
 
-const timetablePath = path.join(__dirname, 'data/timetable.json');
+const dataPath = path.join(__dirname, './data/timetable.json');
 
-// 通知先チャンネルIDをここにセット
-const channelId = '1414423166964727960';
+function dailyNotify(client) {
+    const checkInterval = 60 * 1000; // 1分ごとにチェック
 
-module.exports = (client) => {
-    console.log('📢 サーバー通知システム起動');
-
-    // 毎分チェックして07:00になったら通知
-    cron.schedule('* * * * *', async () => {
+    setInterval(() => {
         const now = new Date();
-        const hour = now.getHours();
-        const minute = now.getMinutes();
+        const day = now.getDay(); // 0:日曜, 1:月曜 ... 6:土曜
+        if (day === 0 || day === 6) return; // 土日はスキップ
 
-        if (hour !== 7 || minute !== 0) return; // 07:00以外はスキップ
+        if (!fs.existsSync(dataPath)) return;
+        const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
 
-        if (!fs.existsSync(timetablePath)) return;
+        for (const guildId in data) {
+            const guildData = data[guildId];
+            if (!guildData.notifyChannelId || guildData.notifyHour === undefined || guildData.notifyMinute === undefined) continue;
 
-        const timetableData = JSON.parse(fs.readFileSync(timetablePath, 'utf8'));
+            if (now.getHours() === guildData.notifyHour && now.getMinutes() === guildData.notifyMinute) {
+                const guild = client.guilds.cache.get(guildId);
+                if (!guild) continue;
+                const channel = guild.channels.cache.get(guildData.notifyChannelId);
+                if (!channel) continue;
 
-        const day = now.getDay(); // 0(日)〜6(土)
-        if (day === 0) return; // 日曜は通知しない
+                let message = `📅 本日の時間割 (${['月','火','水','木','金'][day-1]}曜日)\n`;
+                for (const userId in guildData.users) {
+                    const userTimetable = guildData.users[userId][day];
+                    if (userTimetable) {
+                        message += `<@${userId}>: ${userTimetable.join(', ')}\n`;
+                    }
+                }
 
-        const dayName = ['月','火','水','木','金','土'][day - 1];
-        const channel = await client.channels.fetch(channelId);
-
-        for (const userId of Object.keys(timetableData)) {
-            const userData = timetableData[userId];
-            if (!userData || !userData[day]) continue;
-
-            const subjects = userData[day];
-            const message = `📅 今日の時間割 (${dayName}曜日)\n` +
-                            subjects.map((s, i) => `${i + 1}限: ${s}`).join('\n');
-
-            try {
-                await channel.send(`<@${userId}>\n${message}`);
-            } catch (err) {
-                console.error(`送信失敗: ${userId}`, err);
+                channel.send(message);
             }
         }
-    }, { timezone: "Asia/Tokyo" });
-};
+    }, checkInterval);
+}
+
+module.exports = dailyNotify;

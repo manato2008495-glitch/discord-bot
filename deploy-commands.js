@@ -1,27 +1,37 @@
 require('dotenv').config();
 const { REST, Routes } = require('discord.js');
-const { clientId, guildId } = require('./config.json');
-const fs = require('node:fs');
+const fs = require('fs');
+const path = require('path');
 
+const clientId = process.env.CLIENT_ID; // .env から読み込む
+const token = process.env.TOKEN;       // .env から読み込む
+
+// コマンドを読み込む
 const commands = [];
-const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
+const commandFiles = fs.readdirSync(path.join(__dirname, 'commands')).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
-	const command = require(`./commands/${file}`);
-	commands.push(command.data.toJSON());
+    const command = require(`./commands/${file}`);
+    commands.push(command.data.toJSON());
 }
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+// RESTクライアント作成
+const rest = new REST({ version: '10' }).setToken(token);
 
 (async () => {
-	try {
-		//console.log(`Started refreshing ${commands.length} application (/) commands.`);
-		const data = await rest.put(
-			Routes.applicationGuildCommands(clientId, guildId),
-			{ body: commands },
-		);
-		console.log(`Successfully reloaded ${data.length} application (/) commands.`);
-	} catch (error) {
-		console.error(error);
-	}
+    try {
+        console.log(`🚀 スラッシュコマンドを全サーバーに登録中...`);
+
+        // グローバルコマンドとして登録
+        const data = await rest.put(
+            Routes.applicationCommands(clientId),
+            { body: commands }
+        );
+
+        console.log(`✅ ${data.length} 個のグローバルコマンドを登録しました。`);
+        console.log('⚠️ 注意: グローバルコマンドは反映に最大1時間かかる場合があります。');
+
+    } catch (error) {
+        console.error(error);
+    }
 })();

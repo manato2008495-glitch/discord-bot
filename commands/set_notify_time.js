@@ -2,36 +2,43 @@ const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
 
-const dataPath = path.join(__dirname, '../data/notify_time.json');
+const dataPath = path.join(__dirname, '../data/timetable.json');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('set_notify_time')
-        .setDescription('通知する時間を設定します（例: 16:15）')
-        .addStringOption(option =>
-            option.setName('time')
-                .setDescription('通知時刻を HH:MM 形式で入力')
-                .setRequired(true)
-        ),
+        .setDescription('サーバーごとの通知時間を設定します')
+        .addChannelOption(option => 
+            option.setName('channel')
+                .setDescription('通知を送るチャンネル')
+                .setRequired(true))
+        .addIntegerOption(option => 
+            option.setName('hour')
+                .setDescription('通知する時（0〜23）')
+                .setRequired(true))
+        .addIntegerOption(option => 
+            option.setName('minute')
+                .setDescription('通知する分（0〜59）')
+                .setRequired(true)),
 
     async execute(interaction) {
-        const userId = interaction.user.id;
-        const timeStr = interaction.options.getString('time');
-
-        // 時刻形式チェック
-        if (!/^\d{1,2}:\d{2}$/.test(timeStr)) {
-            await interaction.reply({ content: '⛔ 時刻は HH:MM 形式で入力してください（例: 16:15）', ephemeral: true });
-            return;
-        }
+        const guildId = interaction.guildId;
+        const channelId = interaction.options.getChannel('channel').id;
+        const hour = interaction.options.getInteger('hour');
+        const minute = interaction.options.getInteger('minute');
 
         let data = {};
         if (fs.existsSync(dataPath)) {
             data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
         }
 
-        data[userId] = timeStr;
+        if (!data[guildId]) data[guildId] = { users: {} };
+        data[guildId].notifyChannelId = channelId;
+        data[guildId].notifyHour = hour;
+        data[guildId].notifyMinute = minute;
+
         fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 
-        await interaction.reply({ content: `✅ 通知時刻を ${timeStr} に設定しました（通知は月〜土曜）`, ephemeral: true });
-    }
+        await interaction.reply({ content: `✅ 通知時間を設定しました：<#${channelId}> ${hour}:${minute}`, ephemeral: true });
+    },
 };

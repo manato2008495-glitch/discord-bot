@@ -48,13 +48,12 @@ for (const file of eventsFiles) {
 	console.log(`-> [Loaded Event] ${file.split('.')[0]}`);
 }
 
-// daily_notify を読み込む
+//--------------------daily_notifyを組み込む--------------------------
 const dailyNotify = require('./daily_notify');
 
-// ready イベントに通知スタートを組み込む
-client.once(Events.ClientReady, (client) => {
+client.once(Events.ClientReady, () => {
     console.log(`ログイン完了: ${client.user.tag}`);
-    dailyNotify(client); // 毎朝通知スタート
+    dailyNotify(client); // サーバー通知スタート
 });
 
 //--------------------interactionCreate--------------------------

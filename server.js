@@ -1,7 +1,6 @@
 require('dotenv').config();
 console.log("TOKEN 読み込み:", process.env.TOKEN ? "OK" : "NG");
 
-require('dotenv').config()
 const express = require('express');
 const path = require('path');
 const fs = require("fs");
@@ -17,13 +16,15 @@ app.get("/", (req, res) => {
   });
 })
 
-// サーバーを起動
-app.listen(3006, () => {
-    console.log(`サーバーを開きました`);
-  });
-  
-  if (process.env.TOKEN == undefined || process.env.TOKEN == "") {
-    console.log("TOKENを設定してください");
-  }
+// Render対応ポート
+const PORT = process.env.PORT || 3006;
+app.listen(PORT, () => {
+    console.log(`サーバーを開きました: ${PORT}`);
+});
 
-  require('./main.js')
+if (!process.env.TOKEN) {
+    console.log("TOKENを設定してください");
+    process.exit(1);
+}
+
+require('./main.js');
