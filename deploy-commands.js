@@ -7,6 +7,7 @@ const path = require('path');
 const clientId = process.env.CLIENT_ID;
 const token = process.env.TOKEN;
 
+
 if (!clientId || !token) {
     console.error("❌ CLIENT_ID または TOKEN が環境変数に設定されていません");
     process.exit(1);
