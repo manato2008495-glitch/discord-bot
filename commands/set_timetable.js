@@ -5,60 +5,47 @@ const path = require('path');
 const dataPath = path.join(__dirname, '../data/timetable.json');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('set_timetable')
-    .setDescription('曜日ごとの時間割を設定します')
-    .addStringOption(option =>
-      option.setName('day')
-        .setDescription('曜日を選択')
-        .setRequired(true)
-        .addChoices(
-          { name: '月曜日', value: '1' },
-          { name: '火曜日', value: '2' },
-          { name: '水曜日', value: '3' },
-          { name: '木曜日', value: '4' },
-          { name: '金曜日', value: '5' },
-        ))
-    .addStringOption(option =>
-      option.setName('subjects')
-        .setDescription('時間割をカンマ区切りで入力 (例: 数学,英語,国語,物理,体育)')
-        .setRequired(true)
-    ),
+    data: new SlashCommandBuilder()
+        .setName('set_timetable')
+        .setDescription('自分の時間割を登録します')
+        .addIntegerOption(option =>
+            option.setName('day')
+                .setDescription('曜日を選択 (1=月曜, 2=火曜...)')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('subjects')
+                .setDescription('カンマ区切りで教科を入力')
+                .setRequired(true)),
 
-  async execute(interaction) {
-    const guildId = interaction.guild.id;
-    const userId = interaction.user.id;
-    const day = interaction.options.getString('day'); // 1〜5
-    const subjects = interaction.options.getString('subjects').split(',').map(s => s.trim());
+    async execute(interaction) {
+        await interaction.deferReply({ ephemeral: true });
 
-    let data = {};
-    if (fs.existsSync(dataPath)) {
-      data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    }
+        const userId = interaction.user.id;
+        const day = interaction.options.getInteger('day'); // 1〜5
+        const subjects = interaction.options.getString('subjects').split(',').map(s => s.trim());
 
-    // ギルドデータが無ければ作る
-    if (!data[guildId]) {
-      data[guildId] = {
-        notifyChannelId: null,
-        notifyHour: 7,
-        notifyMinute: 0,
-        users: {}
-      };
-    }
+        // JSON読み込み
+        let data = {};
+        if (fs.existsSync(dataPath)) {
+            data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+        }
 
-    // ユーザーデータが無ければ作る
-    if (!data[guildId].users[userId]) {
-      data[guildId].users[userId] = { "1": [], "2": [], "3": [], "4": [], "5": [] };
-    }
+        const guildId = interaction.guild.id;
+        if (!data[guildId]) {
+            data[guildId] = { users: {}, notifyChannelId: null, notifyHour: 7, notifyMinute: 0 };
+        }
 
-    // 時間割を保存
-    data[guildId].users[userId][day] = subjects;
+        // ユーザーIDがなければ自動で追加
+        if (!data[guildId].users[userId]) {
+            data[guildId].users[userId] = { "1": [], "2": [], "3": [], "4": [], "5": [], "6": [] };
+        }
 
-    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+        // 登録
+        data[guildId].users[userId][day] = subjects;
 
-    await interaction.reply({
-      content: `✅ 時間割を登録しました。\n📅 ${['月','火','水','木','金'][day - 1]}曜日: ${subjects.join(', ')}`,
-      ephemeral: true
-    });
-  },
+        // JSON保存
+        fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
+
+        await interaction.editReply({ content: `✅ ${['月','火','水','木','金','土'][day-1]}曜日の時間割を登録しました。\n${subjects.join(', ')}` });
+    },
 };

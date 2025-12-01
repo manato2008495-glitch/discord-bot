@@ -21,16 +21,15 @@ const client = new Client({
 require("./deploy-commands.js");
 
 //--------------------コマンドを読み込む--------------------------
-// スラッシュコマンド
 client.commands = new Collection();
 const slashcommandsPath = path.join(__dirname, 'commands');
 const slashcommandFiles = fs.readdirSync(slashcommandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of slashcommandFiles) {
-	const slashfilePath = path.join(slashcommandsPath, file);
-	const command = require(slashfilePath);
-	console.log(`-> [Loaded Command] ${file.split('.')[0]}`);
-	client.commands.set(command.data.name, command);
+  const slashfilePath = path.join(slashcommandsPath, file);
+  const command = require(slashfilePath);
+  console.log(`-> [Loaded Command] ${file.split('.')[0]}`);
+  client.commands.set(command.data.name, command);
 }
 
 //--------------------イベントを読み込む--------------------------
@@ -38,44 +37,44 @@ const eventsPath = path.join(__dirname, 'events');
 const eventsFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
 
 for (const file of eventsFiles) {
-	const eventfilePath = path.join(eventsPath, file);
-	const event = require(eventfilePath);
-	if (event.once) {
-		client.once(event.name, (...args) => event.execute(...args));
-	} else {
-		client.on(event.name, (...args) => event.execute(...args));
-	}
-	console.log(`-> [Loaded Event] ${file.split('.')[0]}`);
+  const eventfilePath = path.join(eventsPath, file);
+  const event = require(eventfilePath);
+  if (event.once) {
+    client.once(event.name, (...args) => event.execute(...args));
+  } else {
+    client.on(event.name, (...args) => event.execute(...args));
+  }
+  console.log(`-> [Loaded Event] ${file.split('.')[0]}`);
 }
 
-//--------------------daily_notifyを組み込む--------------------------
+//--------------------daily_notify を読み込む----------------------
 const dailyNotify = require('./daily_notify');
 
-client.once(Events.ClientReady, () => {
-    console.log(`ログイン完了: ${client.user.tag}`);
-    dailyNotify(client); // サーバー通知スタート
+// ready イベントで通知スタート
+client.once(Events.ClientReady, (client) => {
+  console.log(`ログイン完了: ${client.user.tag}`);
+  dailyNotify(client); // サーバーごとの通知スタート
 });
 
 //--------------------interactionCreate--------------------------
 client.on(Events.InteractionCreate, async interaction => {
-	if (!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand()) return;
 
-	const command = interaction.client.commands.get(interaction.commandName);
+  const command = interaction.client.commands.get(interaction.commandName);
 
-	if (!command) {
-		console.error(`No command matching ${interaction.commandName} was found.`);
-		return;
-	}
+  if (!command) {
+    console.error(`No command matching ${interaction.commandName} was found.`);
+    return;
+  }
 
-	try {
-		// interaction のみ渡す
-		await command.execute(interaction);
-	} catch (error) {
-		console.error(error);
-		if (!interaction.replied) {
-			await interaction.reply({ content: 'コマンド実行中にエラーが発生しました', ephemeral: true });
-		}
-	}
+  try {
+    await command.execute(interaction);
+  } catch (error) {
+    console.error(error);
+    if (!interaction.replied) {
+      await interaction.reply({ content: 'コマンド実行中にエラーが発生しました', ephemeral: true });
+    }
+  }
 });
 
 //--------------------Botログイン--------------------------
