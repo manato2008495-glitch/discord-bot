@@ -1,58 +1,48 @@
 const fs = require('fs');
 const path = require('path');
-const dataPath = path.join(__dirname, './data/timetable.json');
 const cron = require('node-cron');
+const dataPath = path.join(__dirname, './data/timetable.json');
 
 module.exports = (client) => {
+    console.log('✅ daily_notify 起動');
 
     // 毎分チェック
     cron.schedule('* * * * *', async () => {
-        let data = {};
+        try {
+            if (!fs.existsSync(dataPath)) return;
 
-        if (fs.existsSync(dataPath)) {
-            try {
-                data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-            } catch (e) {
-                console.error('JSON parse error:', e);
-                return;
-            }
-        }
+            const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+            const now = new Date();
+            const nowHour = now.getHours();
+            const nowMinute = now.getMinutes();
+            const weekday = now.getDay(); // 0=日曜, 1=月曜, ...
 
-        const now = new Date();
-        const nowHour = now.getHours();
-        const nowMinute = now.getMinutes();
+            if (weekday < 1 || weekday > 5) return; // 平日のみ
 
-        for (const guildId of Object.keys(data)) {
-            const guildData = data[guildId];
+            for (const guildId of Object.keys(data)) {
+                const guildData = data[guildId];
+                if (!guildData.notifyChannelId) continue;
+                if (guildData.notifyHour !== nowHour || guildData.notifyMinute !== nowMinute) continue;
 
-            if (!guildData.notifyChannelId) continue;
+                const guild = client.guilds.cache.get(guildId);
+                if (!guild) continue;
 
-            // 時刻一致?
-            if (guildData.notifyHour !== nowHour || guildData.notifyMinute !== nowMinute) {
-                continue;
-            }
+                const channel = guild.channels.cache.get(guildData.notifyChannelId);
+                if (!channel) continue;
 
-            const guild = client.guilds.cache.get(guildId);
-            if (!guild) continue;
+                // メッセージ作成
+                let msg = `⏰ **${['月','火','水','木','金'][weekday-1]}曜日の時間割通知**\n\n`;
+                for (const userId of Object.keys(guildData.users || {})) {
+                    const subjects = guildData.users[userId][weekday.toString()] || [];
+                    msg += `<@${userId}>: ${subjects.join(', ') || '未登録'}\n`;
+                }
 
-            const channel = guild.channels.cache.get(guildData.notifyChannelId);
-            if (!channel) continue;
-
-            // 全ユーザーの今日の時間割をまとめる
-            const weekday = now.getDay(); // 1=月
-
-            if (weekday < 1 || weekday > 5) continue;
-
-            let msg = `⏰ **${weekday}曜日の時間割通知**\n\n`;
-
-            for (const userId of Object.keys(guildData.users)) {
-                const subjects = guildData.users[userId][weekday.toString()] || [];
-                msg += `<@${userId}>: ${subjects.join(', ') || '未登録'}\n`;
+                await channel.send(msg);
+                console.log(`✅ 通知送信: ${guildId}`);
             }
 
-            channel.send(msg);
-            console.log('Sent notify to', guildId);
+        } catch (err) {
+            console.error('daily_notify エラー:', err);
         }
     });
-
 };
