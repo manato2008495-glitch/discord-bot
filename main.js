@@ -71,11 +71,21 @@ client.on(Events.InteractionCreate, async interaction => {
     await command.execute(interaction);
   } catch (error) {
     console.error(error);
-    if (!interaction.replied) {
-      await interaction.reply({ content: 'コマンド実行中にエラーが発生しました', ephemeral: true });
+
+    // すでに返信済み？
+    if (interaction.deferred) {
+      // deferReply() → editReply()
+      await interaction.editReply('コマンド実行中にエラーが発生しました。');
+    } else if (!interaction.replied) {
+      // まだ未返信
+      await interaction.reply({ content: 'コマンド実行中にエラーが発生しました。', ephemeral: true });
+    } else {
+      // reply() 後 → followUp しかできない
+      await interaction.followUp({ content: 'コマンド実行中にエラーが発生しました（2回目）', ephemeral: true });
     }
   }
 });
+
 
 //--------------------Botログイン--------------------------
 client.login(process.env.TOKEN);

@@ -27,4 +27,4 @@ if (!process.env.TOKEN) {
     process.exit(1);
 }
 
-require('./main.js');
+require('./daily_notify')(client);

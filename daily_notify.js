@@ -1,46 +1,58 @@
 const fs = require('fs');
 const path = require('path');
-
 const dataPath = path.join(__dirname, './data/timetable.json');
+const cron = require('node-cron');
 
-function dailyNotify(client) {
-    const checkInterval = 60 * 1000; // 1分ごと
+module.exports = (client) => {
 
-    setInterval(async () => {
-        const now = new Date(Date.now() + 1000 * 60 * 60 * 9); // JST補正
-        const day = now.getDay();
-        if (day === 0 || day === 6) return; // 土日スキップ
+    // 毎分チェック
+    cron.schedule('* * * * *', async () => {
+        let data = {};
 
-        if (!fs.existsSync(dataPath)) return;
-        const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-
-        for (const guildId in data) {
-            const guildData = data[guildId];
-            if (!guildData.notifyChannelId || !guildData.users) continue;
-            const channel = client.channels.cache.get(guildData.notifyChannelId);
-            if (!channel) continue;
-
-            for (const userId in guildData.users) {
-                const userData = guildData.users[userId];
-                if (!userData.notifyHour || userData.notifyMinute === undefined) continue;
-
-                if (now.getHours() === userData.notifyHour && now.getMinutes() === userData.notifyMinute) {
-                    const dayNameMap = ['日','月','火','水','木','金','土'];
-                    const dayName = dayNameMap[day];
-                    const subjects = userData[day] || [];
-
-                    if (subjects.length > 0) {
-                        const message = `📅 本日の時間割 (${dayName}曜日)\n<@${userId}>: ${subjects.join(', ')}`;
-                        try {
-                            await channel.send(message);
-                        } catch (err) {
-                            console.error(`通知送信失敗: ${guildId} / ${userId}`, err);
-                        }
-                    }
-                }
+        if (fs.existsSync(dataPath)) {
+            try {
+                data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+            } catch (e) {
+                console.error('JSON parse error:', e);
+                return;
             }
         }
-    }, checkInterval);
-}
 
-module.exports = dailyNotify;
+        const now = new Date();
+        const nowHour = now.getHours();
+        const nowMinute = now.getMinutes();
+
+        for (const guildId of Object.keys(data)) {
+            const guildData = data[guildId];
+
+            if (!guildData.notifyChannelId) continue;
+
+            // 時刻一致?
+            if (guildData.notifyHour !== nowHour || guildData.notifyMinute !== nowMinute) {
+                continue;
+            }
+
+            const guild = client.guilds.cache.get(guildId);
+            if (!guild) continue;
+
+            const channel = guild.channels.cache.get(guildData.notifyChannelId);
+            if (!channel) continue;
+
+            // 全ユーザーの今日の時間割をまとめる
+            const weekday = now.getDay(); // 1=月
+
+            if (weekday < 1 || weekday > 5) continue;
+
+            let msg = `⏰ **${weekday}曜日の時間割通知**\n\n`;
+
+            for (const userId of Object.keys(guildData.users)) {
+                const subjects = guildData.users[userId][weekday.toString()] || [];
+                msg += `<@${userId}>: ${subjects.join(', ') || '未登録'}\n`;
+            }
+
+            channel.send(msg);
+            console.log('Sent notify to', guildId);
+        }
+    });
+
+};
