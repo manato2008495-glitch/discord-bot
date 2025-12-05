@@ -1,7 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-
 const dataPath = path.join(__dirname, '../data/timetable.json');
 
 module.exports = {
