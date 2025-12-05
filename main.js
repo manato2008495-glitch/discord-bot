@@ -1,91 +1,93 @@
 require('dotenv').config();
 console.log("TOKEN 読み込み:", process.env.TOKEN ? "OK" : "NG");
 
-const { Client, Collection, Events, GatewayIntentBits } = require('discord.js');
-const fs = require('node:fs');
-const path = require('node:path');
+const { Client, Collection, GatewayIntentBits, Events } = require('discord.js');
+const fs = require('fs');
+const path = require('path');
+const express = require('express');
 
-// Bot クライアント作成
+// ================== Express サーバー ==================
+const app = express();
+app.use(express.static(path.join(__dirname, 'pages')));
+
+app.get("/", (req, res) => {
+    fs.readFile("./pages/index.html", (err, data) => {
+        if (err) return res.status(500).send("Error loading page");
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.write(data);
+        res.end();
+    });
+});
+
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => console.log(`🌍 サーバー起動: ${PORT}`));
+
+// ================== Discord Bot ==================
+if (!process.env.TOKEN) {
+    console.error("❌ TOKEN が設定されていません");
+    process.exit(1);
+}
+
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessageReactions,
-    GatewayIntentBits.GuildVoiceStates,
-  ],
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent
+    ]
 });
 
-// deploy-commands.js を読み込む（スラッシュコマンド登録用）
-require("./deploy-commands.js");
-
-//--------------------コマンドを読み込む--------------------------
+// -------------------- コマンド読み込み --------------------
 client.commands = new Collection();
-const slashcommandsPath = path.join(__dirname, 'commands');
-const slashcommandFiles = fs.readdirSync(slashcommandsPath).filter(file => file.endsWith('.js'));
-
-for (const file of slashcommandFiles) {
-  const slashfilePath = path.join(slashcommandsPath, file);
-  const command = require(slashfilePath);
-  console.log(`-> [Loaded Command] ${file.split('.')[0]}`);
-  client.commands.set(command.data.name, command);
-}
-
-//--------------------イベントを読み込む--------------------------
-const eventsPath = path.join(__dirname, 'events');
-const eventsFiles = fs.readdirSync(eventsPath).filter(file => file.endsWith('.js'));
-
-for (const file of eventsFiles) {
-  const eventfilePath = path.join(eventsPath, file);
-  const event = require(eventfilePath);
-  if (event.once) {
-    client.once(event.name, (...args) => event.execute(...args));
-  } else {
-    client.on(event.name, (...args) => event.execute(...args));
-  }
-  console.log(`-> [Loaded Event] ${file.split('.')[0]}`);
-}
-
-//--------------------daily_notify を読み込む----------------------
-const dailyNotify = require('./daily_notify');
-
-// ready イベントで通知スタート
-client.once(Events.ClientReady, (client) => {
-  console.log(`ログイン完了: ${client.user.tag}`);
-  dailyNotify(client); // サーバーごとの通知スタート
-});
-
-//--------------------interactionCreate--------------------------
-client.on(Events.InteractionCreate, async interaction => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const command = interaction.client.commands.get(interaction.commandName);
-
-  if (!command) {
-    console.error(`No command matching ${interaction.commandName} was found.`);
-    return;
-  }
-
-  try {
-    await command.execute(interaction);
-  } catch (error) {
-    console.error(error);
-
-    // すでに返信済み？
-    if (interaction.deferred) {
-      // deferReply() → editReply()
-      await interaction.editReply('コマンド実行中にエラーが発生しました。');
-    } else if (!interaction.replied) {
-      // まだ未返信
-      await interaction.reply({ content: 'コマンド実行中にエラーが発生しました。', ephemeral: true });
-    } else {
-      // reply() 後 → followUp しかできない
-      await interaction.followUp({ content: 'コマンド実行中にエラーが発生しました（2回目）', ephemeral: true });
+const commandsPath = path.join(__dirname, 'commands');
+if (fs.existsSync(commandsPath)) {
+    const commandFiles = fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'));
+    for (const file of commandFiles) {
+        const command = require(path.join(commandsPath, file));
+        client.commands.set(command.data.name, command);
+        console.log(`-> [Loaded Command] ${command.data.name}`);
     }
-  }
+}
+
+// -------------------- イベント読み込み --------------------
+const eventsPath = path.join(__dirname, 'events');
+if (fs.existsSync(eventsPath)) {
+    const eventFiles = fs.readdirSync(eventsPath).filter(f => f.endsWith('.js'));
+    for (const file of eventFiles) {
+        const event = require(path.join(eventsPath, file));
+        if (event.once) {
+            client.once(event.name, (...args) => event.execute(...args));
+        } else {
+            client.on(event.name, (...args) => event.execute(...args));
+        }
+        console.log(`-> [Loaded Event] ${event.name}`);
+    }
+}
+
+// -------------------- daily_notify 起動 --------------------
+client.once(Events.ClientReady, () => {
+    console.log(`✅ ログイン完了: ${client.user.tag}`);
+    require('./daily_notify')(client);
 });
 
+// -------------------- interactionCreate --------------------
+client.on(Events.InteractionCreate, async interaction => {
+    if (!interaction.isChatInputCommand()) return;
 
-//--------------------Botログイン--------------------------
-client.login(process.env.TOKEN);
+    const command = client.commands.get(interaction.commandName);
+    if (!command) return console.error(`No command matching ${interaction.commandName} found`);
+
+    try {
+        await command.execute(interaction);
+    } catch (err) {
+        console.error(err);
+        if (interaction.deferred || interaction.replied) {
+            await interaction.editReply({ content: '❌ コマンド実行中にエラーが発生しました' });
+        } else {
+            await interaction.reply({ content: '❌ コマンド実行中にエラーが発生しました', flags: 64 });
+        }
+    }
+});
+
+// -------------------- Botログイン --------------------
+client.login(process.env.TOKEN)
+    .catch(err => console.error('❌ TOKEN 読み込み失敗', err));

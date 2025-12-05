@@ -23,30 +23,35 @@ module.exports = {
     async execute(interaction) {
         await interaction.deferReply({ ephemeral: true });
 
-        const userId = interaction.user.id;
-        const guildId = interaction.guild.id;
-        const day = interaction.options.getString('day');
+        try {
+            const userId = interaction.user.id;
+            const guildId = interaction.guild.id;
+            const day = interaction.options.getString('day');
 
-        let data = {};
-        if (fs.existsSync(dataPath)) {
-            data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+            let data = {};
+            if (fs.existsSync(dataPath)) data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+
+            if (!data[guildId] || !data[guildId].users || !data[guildId].users[userId]) {
+                return await interaction.editReply({ content: '❌ 時間割が登録されていません。' });
+            }
+
+            const subjects = data[guildId].users[userId][day];
+            if (!subjects || subjects.length === 0) {
+                return await interaction.editReply({ content: '❌ この日の時間割は登録されていません。' });
+            }
+
+            const message =
+                `📅 ${['月','火','水','木','金'][day - 1]}曜日の時間割\n` +
+                subjects.map((s, i) => `${i + 1}限: ${s}`).join('\n');
+
+            await interaction.editReply({ content: message });
+        } catch (err) {
+            console.error(err);
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: '❌ コマンド実行中にエラーが発生しました' });
+            } else {
+                await interaction.reply({ content: '❌ コマンド実行中にエラーが発生しました', ephemeral: true });
+            }
         }
-
-        // データが存在しない場合
-        if (!data[guildId] || !data[guildId].users || !data[guildId].users[userId]) {
-            return await interaction.editReply({ content: '❌ 時間割が登録されていません。' });
-        }
-
-        const subjects = data[guildId].users[userId][day];
-
-        if (!subjects || subjects.length === 0) {
-            return await interaction.editReply({ content: '❌ この日の時間割は登録されていません。' });
-        }
-
-        const message =
-            `📅 ${['月','火','水','木','金'][day - 1]}曜日の時間割\n` +
-            subjects.map((s, i) => `${i + 1}限: ${s}`).join('\n');
-
-        await interaction.editReply({ content: message });
     },
 };

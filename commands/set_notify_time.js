@@ -11,24 +11,35 @@ module.exports = {
         .addIntegerOption(opt => opt.setName('minute').setDescription('通知時刻(分)').setRequired(true)),
 
     async execute(interaction) {
-        const hour = interaction.options.getInteger('hour');
-        const minute = interaction.options.getInteger('minute');
+        await interaction.deferReply({ ephemeral: true });
 
-        if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, '{}');
+        try {
+            const hour = interaction.options.getInteger('hour');
+            const minute = interaction.options.getInteger('minute');
 
-        const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-        const guildId = interaction.guildId;
+            if (!fs.existsSync(dataPath)) fs.writeFileSync(dataPath, '{}');
 
-        if (!data[guildId]) {
-            data[guildId] = { notifyChannelId: interaction.channelId, notifyHour: hour, notifyMinute: minute, users: {} };
-        } else {
-            data[guildId].notifyHour = hour;
-            data[guildId].notifyMinute = minute;
-            data[guildId].notifyChannelId = interaction.channelId;
+            const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+            const guildId = interaction.guildId;
+
+            if (!data[guildId]) {
+                data[guildId] = { notifyChannelId: interaction.channelId, notifyHour: hour, notifyMinute: minute, users: {} };
+            } else {
+                data[guildId].notifyHour = hour;
+                data[guildId].notifyMinute = minute;
+                data[guildId].notifyChannelId = interaction.channelId;
+            }
+
+            fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf8');
+
+            await interaction.editReply({ content: `通知時間を ${hour}時${minute}分 に設定しました` });
+        } catch (err) {
+            console.error(err);
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ content: '❌ コマンド実行中にエラーが発生しました' });
+            } else {
+                await interaction.reply({ content: '❌ コマンド実行中にエラーが発生しました', ephemeral: true });
+            }
         }
-
-        fs.writeFileSync(dataPath, JSON.stringify(data, null, 2), 'utf8');
-
-        await interaction.reply({ content: `通知時間を ${hour}時${minute}分 に設定しました`, ephemeral: true });
     },
 };
