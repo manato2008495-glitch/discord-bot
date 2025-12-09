@@ -19,8 +19,10 @@ function dailyNotify(client) {
             if (!guildData.notifyChannelId || guildData.notifyHour === undefined || guildData.notifyMinute === undefined) continue;
 
             if (now.getHours() === guildData.notifyHour && now.getMinutes() === guildData.notifyMinute) {
+
                 const guild = client.guilds.cache.get(guildId);
                 if (!guild) continue;
+
                 const channel = guild.channels.cache.get(guildData.notifyChannelId);
                 if (!channel) continue;
 
@@ -39,6 +41,7 @@ function dailyNotify(client) {
                     message += `<@${userId}>: ${subjects.join(', ')}\n`;
                 }
 
+                // 空メッセージチェック
                 if (message.trim() !== `📅 本日の時間割 (${dayName}曜日)`) {
                     try {
                         await channel.send(message);
