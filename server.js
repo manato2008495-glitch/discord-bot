@@ -6,43 +6,63 @@ const path = require('path');
 const fs = require("fs");
 const { Client, GatewayIntentBits } = require('discord.js');
 
+// ====== TOKEN チェック ======
 if (!process.env.TOKEN) {
-    console.log("TOKENを設定してください");
+    console.log("❌ TOKEN が設定されていません");
     process.exit(1);
 }
 
-// ===== Expressサーバー部分 =====
+// ====== Express サーバー ======
 const app = express();
-app.use(express.static(path.join(__dirname, 'pages')));
+const pagesDir = path.join(__dirname, "pages");
+
+// 静的ファイル
+if (fs.existsSync(pagesDir)) {
+    app.use(express.static(pagesDir));
+}
 
 app.get("/", (req, res) => {
-  fs.readFile("./pages/index.html", (err, data) => {
-    if (err) {
-      res.status(500).send("Error loading page");
-      return;
+    const indexPath = path.join(pagesDir, "index.html");
+
+    if (!fs.existsSync(indexPath)) {
+        return res.status(404).send("index.html が見つかりません");
     }
-    res.writeHead(200, { "Content-Type": "text/html" });
-    res.write(data);
-    res.end();
-  });
-})
+
+    fs.readFile(indexPath, (err, data) => {
+        if (err) return res.status(500).send("ページ読み込みエラー");
+        res.writeHead(200, { "Content-Type": "text/html" });
+        res.end(data);
+    });
+});
 
 const PORT = process.env.PORT || 3006;
 app.listen(PORT, () => {
-    console.log(`サーバーを開きました: ${PORT}`);
+    console.log(`🌐 Webサーバー起動: http://localhost:${PORT}`);
 });
 
-// ===== Discordボット部分 =====
+// ====== Discord Bot ======
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages] // 必要なIntentを追加
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.GuildMembers,     // 必要なら
+        GatewayIntentBits.MessageContent     // テキスト取得が必要なら
+    ]
 });
 
 client.once('ready', () => {
-  console.log(`Logged in as ${client.user.tag}!`);
+    console.log(`🤖 Logged in as ${client.user.tag}`);
 
-  // daily_notify を呼ぶ（clientが定義されたあと）
-  require('./daily_notify')(client);
+    // daily_notify を起動
+    const dailyNotify = require('./daily_notify');
+    dailyNotify(client);
+
+    // Render がスリープしないように(無料プラン対策)
+    setInterval(() => {
+        console.log("⏳ keep-alive ping");
+    }, 1000 * 60 * 5); // 5分ごと
 });
 
+// TOKEN ログイン
 client.login(process.env.TOKEN)
-  .catch(err => console.error('TOKEN 読み込み失敗', err));
+    .catch(err => console.error('❌ TOKEN 読み込み失敗', err));

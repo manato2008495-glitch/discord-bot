@@ -1,7 +1,12 @@
 const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
-const dataPath = path.join(__dirname, '../data/timetable.json');
+
+// dataフォルダ作成（Render対策）
+const dataDir = path.join(__dirname, '../data');
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
+
+const dataPath = path.join(dataDir, 'timetable.json');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -11,7 +16,7 @@ module.exports = {
         .addIntegerOption(opt => opt.setName('minute').setDescription('通知時刻(分)').setRequired(true)),
 
     async execute(interaction) {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: 64 }); // ephemeral: true の代わり
 
         try {
             const hour = interaction.options.getInteger('hour');
@@ -35,11 +40,7 @@ module.exports = {
             await interaction.editReply({ content: `通知時間を ${hour}時${minute}分 に設定しました` });
         } catch (err) {
             console.error(err);
-            if (interaction.deferred || interaction.replied) {
-                await interaction.editReply({ content: '❌ コマンド実行中にエラーが発生しました' });
-            } else {
-                await interaction.reply({ content: '❌ コマンド実行中にエラーが発生しました', ephemeral: true });
-            }
+            await interaction.editReply({ content: '❌ コマンド実行中にエラーが発生しました' });
         }
     },
 };
