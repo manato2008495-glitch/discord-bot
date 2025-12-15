@@ -1,64 +1,44 @@
-const { SlashCommandBuilder, MessageFlags } = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 const fs = require('fs');
 const path = require('path');
+
 const dataPath = path.join(__dirname, '../data/timetable.json');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('set_notify_time')
-    .setDescription('通知時間を設定')
-    .addIntegerOption(opt =>
-      opt.setName('hour').setDescription('時(0-23)').setRequired(true))
-    .addIntegerOption(opt =>
-      opt.setName('minute').setDescription('分(0-59)').setRequired(true)),
+    data: new SlashCommandBuilder()
+        .setName('set_notify_time')
+        .setDescription('サーバーごとの通知時間を設定します')
+        .addChannelOption(option => 
+            option.setName('channel')
+                .setDescription('通知を送るチャンネル')
+                .setRequired(true))
+        .addIntegerOption(option => 
+            option.setName('hour')
+                .setDescription('通知する時（0〜23）')
+                .setRequired(true))
+        .addIntegerOption(option => 
+            option.setName('minute')
+                .setDescription('通知する分（0〜59）')
+                .setRequired(true)),
 
-  async execute(interaction) {
-    try {
-      // ★★★ ここに入れる ★★★
-      await interaction.deferReply({
-        flags: MessageFlags.Ephemeral
-      });
+    async execute(interaction) {
+        const guildId = interaction.guildId;
+        const channelId = interaction.options.getChannel('channel').id;
+        const hour = interaction.options.getInteger('hour');
+        const minute = interaction.options.getInteger('minute');
 
-      // ===== ここから通常処理 =====
-      const hour = interaction.options.getInteger('hour');
-      const minute = interaction.options.getInteger('minute');
+        let data = {};
+        if (fs.existsSync(dataPath)) {
+            data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+        }
 
-      if (!fs.existsSync(dataPath)) {
-        fs.writeFileSync(dataPath, '{}');
-      }
+        if (!data[guildId]) data[guildId] = { users: {} };
+        data[guildId].notifyChannelId = channelId;
+        data[guildId].notifyHour = hour;
+        data[guildId].notifyMinute = minute;
 
-      const data = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-      const guildId = interaction.guildId;
-      const userId = interaction.user.id;
+        fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
 
-      if (!data[guildId]) {
-        data[guildId] = { notifyChannelId: interaction.channelId, users: {} };
-      }
-
-      if (!data[guildId].users[userId]) {
-        data[guildId].users[userId] = {
-          notifyHour: null,
-          notifyMinute: null,
-          1: [], 2: [], 3: [], 4: [], 5: [], 6: []
-        };
-      }
-
-      data[guildId].notifyChannelId = interaction.channelId;
-      data[guildId].users[userId].notifyHour = hour;
-      data[guildId].users[userId].notifyMinute = minute;
-
-      fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-
-      await interaction.editReply(
-        `✅ あなたの通知時間を **${hour}時${minute}分** に設定した`
-      );
-
-    } catch (err) {
-      console.error(err);
-
-      if (interaction.deferred || interaction.replied) {
-        await interaction.editReply('❌ エラーが発生した');
-      }
-    }
-  }
+        await interaction.reply({ content: `✅ 通知時間を設定しました：<#${channelId}> ${hour}:${minute}`, ephemeral: true });
+    },
 };
